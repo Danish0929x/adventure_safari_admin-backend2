@@ -11,8 +11,8 @@ const app = express();
 // CORS configuration
 const corsOptions = {
   origin: [
-    "http://localhost:3000",
     "https://adventure-safari-admin-frontend.vercel.app/",
+    "http://localhost:3000",
   ],
   credentials: true, // Allow cookies and auth headers
   optionsSuccessStatus: 200 // For legacy browser support
