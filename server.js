@@ -11,8 +11,14 @@ import tripRoutes from "./routes/trip.routes.js";
 const app = express();
 
 // CORS configuration
+// CORS configuration
 const corsOptions = {
-  origin: "https://adventure-safari-admin-frontend.vercel.app",
+  origin: [
+    "https://adventure-safari-admin-frontend-k5u.vercel.app", // Your actual deployment URL
+    "https://adventure-safari-admin-frontend.vercel.app", // Keep this if you plan to use it
+    "http://localhost:3000", // For local development
+    "http://localhost:5173"  // If using Vite
+  ],
   credentials: true,
   optionsSuccessStatus: 200,
 };
