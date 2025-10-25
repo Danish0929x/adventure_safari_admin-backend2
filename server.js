@@ -5,6 +5,8 @@ dotenv.config();
 import dbConnect from "./db/dbConnect.js";
 import authRoutes from "./routes/auth.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
+import dashboardRoutes from "./routes/dashboard.routes.js";
+import tripRoutes from "./routes/trip.routes.js";
 
 const app = express();
 
@@ -27,6 +29,8 @@ app.get("/", (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/trips", tripRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

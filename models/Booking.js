@@ -1,58 +1,74 @@
 import mongoose from "mongoose";
 
-const guestSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-    trim: true,
-  },
-  age: {
-    type: Number,
-    required: true,
-    min: 1,
-    max: 120,
-  },
-  passport: {
-    type: String,
-    required: true,
-    trim: true,
-  }
-});
-
-const bookingSchema = new mongoose.Schema(
+// Guest Schema
+const guestSchema = new mongoose.Schema(
   {
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+    name: {
+      type: String,
       required: true,
+      trim: true,
     },
-    tripId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Trip',
-      required: true,
-    },
-    guests: [guestSchema],
-    totalAmount: {
+    age: {
       type: Number,
       required: true,
+      min: 0,
     },
-    bookingStatus: {
+    gender: {
       type: String,
-      enum: ['Pending', 'Confirmed', 'Cancelled', 'Completed'],
-      default: 'Pending',
+      enum: ["male", "female", "other"],
     },
-    paymentStatus: {
+    phone: {
       type: String,
-      enum: ['Pending', 'Paid', 'Partial', 'Refunded'],
-      default: 'Pending',
+      trim: true,
     },
-    bookingDate: {
-      type: Date,
-      default: Date.now,
+    country: {
+      type: String,
+      trim: true,
     },
-    travelDate: {
+    state: {
+      type: String,
+      trim: true,
+    },
+    address: {
+      type: String,
+      trim: true,
+    },
+    // Passport Information
+    passport: {
+      type: String,
+      trim: true,
+    },
+    passportNumber: {
+      type: String,
+      trim: true,
+    },
+    passportCountry: {
+      type: String,
+      trim: true,
+    },
+    passportIssuedOn: {
       type: Date,
-      required: true,
+    },
+    passportExpiresOn: {
+      type: Date,
+    },
+    // Emergency Contact
+    emergencyContactName: {
+      type: String,
+      trim: true,
+    },
+    emergencyContactNumber: {
+      type: String,
+      trim: true,
+    },
+    // Documents
+    medicalCertificate: {
+      type: String,
+      trim: true,
+    },
+    travelInsurance: {
+      type: String,
+      trim: true,
     }
   },
   {
@@ -60,10 +76,64 @@ const bookingSchema = new mongoose.Schema(
   }
 );
 
-// Index for better query performance
-bookingSchema.index({ userId: 1 });
-bookingSchema.index({ tripId: 1 });
-bookingSchema.index({ bookingStatus: 1 });
-bookingSchema.index({ travelDate: 1 });
+// Booking Schema
+const bookingSchema = new mongoose.Schema(
+  {
+    tripId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Trip",
+      required: true,
+    },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    bookingId: {
+      type: String,
+      required: true,
+    },
+    bookingDate: {
+      type: Date,
+      default: Date.now,
+    },
+    guests: [guestSchema], // Array of guest subdocuments
+    bookingStatus: {
+      type: String,
+      enum: ["pending", "confirmed", "cancelled", "completed"],
+      default: "pending",
+    },
+    paymentStatus: {
+      type: String,
+      enum: ["pending", "paid", "refunded"],
+      default: "pending",
+    },
+    registrationPaymentDetails: {
+      transactionId: String,
+      paymentDate: Date,
+      amount: Number,
+      currency: String,
+      payerEmail: String,
+      payerName: String,
+      status: {
+        type: String,
+        enum: ["pending", "paid", "refunded"],
+        default: "pending"
+      }
+    },
+     acknowledge: {
+      type: Boolean,
+      default: false
+    }
+  },
+  {
+    timestamps: true,
+  }
+);
 
-export default mongoose.model("Booking", bookingSchema);
+// Export models
+const Guest = mongoose.model("Guest", guestSchema);
+const Booking = mongoose.model("Booking", bookingSchema);
+
+export { Guest };
+export default Booking;

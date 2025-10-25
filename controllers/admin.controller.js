@@ -3,12 +3,42 @@ import Booking from "../models/Booking.js";
 import Trip from "../models/Trip.js";
 
 
-// Get all users
+// Get all users with booking counts
 export const getAllUsers = async (req, res) => {
   try {
-    const users = await User.find().select("-password");
+    const users = await User.aggregate([
+      {
+        $lookup: {
+          from: "bookings", // MongoDB collection name (lowercase plural)
+          localField: "_id",
+          foreignField: "userId",
+          as: "bookings"
+        }
+      },
+      {
+        $addFields: {
+          bookingCount: { $size: "$bookings" }
+        }
+      },
+      {
+        $project: {
+          password: 0,
+          verificationToken: 0,
+          resetPasswordToken: 0,
+          resetPasswordExpires: 0,
+          twoFactorSecret: 0,
+          twoFactorTempSecret: 0,
+          bookings: 0 // Remove the bookings array from output
+        }
+      },
+      {
+        $sort: { createdAt: -1 } // Sort by newest first
+      }
+    ]);
+
     res.json(users);
   } catch (err) {
+    console.error("Error fetching users:", err);
     res.status(500).json({ message: "Error fetching users" });
   }
 };
