@@ -12,7 +12,7 @@ const app = express();
 
 // CORS configuration
 const corsOptions = {
-  origin: true, // Allow all origins temporarily for debugging
+  origin: "https://adventure-safari-admin-frontend.vercel.app",
   credentials: true,
   optionsSuccessStatus: 200,
 };
