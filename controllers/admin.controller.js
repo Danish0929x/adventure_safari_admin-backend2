@@ -1,167 +1,470 @@
-import User from "../models/User.js";
-import Booking from "../models/Booking.js";
-import Trip from "../models/Trip.js";
-import mongoose from "mongoose";
+import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { getBookingById } from "../../services/admin";
+import "./ViewBooking.css";
 
-// Get all users with booking counts
-export const getAllUsers = async (req, res) => {
-  try {
-    const users = await User.aggregate([
-      {
-        $lookup: {
-          from: "bookings", // MongoDB collection name (lowercase plural)
-          localField: "_id",
-          foreignField: "userId",
-          as: "bookings",
-        },
-      },
-      {
-        $addFields: {
-          bookingCount: { $size: "$bookings" },
-        },
-      },
-      {
-        $project: {
-          password: 0,
-          verificationToken: 0,
-          resetPasswordToken: 0,
-          resetPasswordExpires: 0,
-          twoFactorSecret: 0,
-          twoFactorTempSecret: 0,
-          bookings: 0, // Remove the bookings array from output
-        },
-      },
-      {
-        $sort: { createdAt: -1 }, // Sort by newest first
-      },
-    ]);
+const ViewBooking = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [booking, setBooking] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-    res.json(users);
-  } catch (err) {
-    console.error("Error fetching users:", err);
-    res.status(500).json({ message: "Error fetching users" });
-  }
-};
+  useEffect(() => {
+    fetchBookingDetails();
+  }, [id]);
 
-// Get all bookings with user and trip details
-export const getAllBookings = async (req, res) => {
-  try {
-    const bookings = await Booking.find()
-      .populate("userId", "name email")
-      .populate("tripId", "name destination price")
-      .sort({ createdAt: -1 }); // Latest bookings first
-
-    res.json(bookings);
-  } catch (err) {
-    console.error("Error fetching bookings:", err);
-    res.status(500).json({ message: "Error fetching bookings" });
-  }
-};
-
-export const getBookingById = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    // Validate ObjectId
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ message: "Invalid booking ID" });
+  const fetchBookingDetails = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const bookingData = await getBookingById(id);
+      console.log("Booking details:", bookingData);
+      setBooking(bookingData);
+    } catch (err) {
+      setError(err.message);
+      console.error("Error fetching booking details:", err);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const booking = await Booking.findById(id)
-      .populate("userId", "name email phone")
-      .populate("tripId", "name destination price duration");
+  const handleBack = () => navigate("/dashboard/bookings");
 
-    if (!booking) {
-      return res.status(404).json({ message: "Booking not found" });
-    }
+  const displayValue = (value) => {
+    if (value === null || value === undefined || value === "") return "null";
+    return value;
+  };
 
-    res.json(booking);
-  } catch (err) {
-    console.error("Error fetching booking:", err);
-    res.status(500).json({ message: "Error fetching booking" });
-  }
-};
-
-// Create new booking (admin can create booking for any user)
-export const createBooking = async (req, res) => {
-  try {
-    const { userId, tripId, guests, travelDate } = req.body;
-
-    // Validate required fields
-    if (!userId || !tripId || !guests || !travelDate) {
-      return res.status(400).json({
-        message: "userId, tripId, guests, and travelDate are required",
-      });
-    }
-
-    // Validate guests array
-    if (!Array.isArray(guests) || guests.length === 0) {
-      return res.status(400).json({
-        message: "At least one guest is required",
-      });
-    }
-
-    // Validate each guest has required fields
-    for (let guest of guests) {
-      if (!guest.name || !guest.age || !guest.passport) {
-        return res.status(400).json({
-          message: "Each guest must have name, age, and passport",
-        });
-      }
-    }
-
-    // Check if user exists
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // Check if trip exists
-    const trip = await Trip.findById(tripId);
-    if (!trip) {
-      return res.status(404).json({ message: "Trip not found" });
-    }
-
-    if (!trip.isActive) {
-      return res.status(400).json({ message: "Trip is not available" });
-    }
-
-    // Calculate total amount (price per person)
-    const totalAmount = trip.price * guests.length;
-
-    // Create booking
-    const booking = new Booking({
-      userId,
-      tripId,
-      guests,
-      totalAmount,
-      travelDate: new Date(travelDate),
+  const formatDate = (date) => {
+    if (!date) return "null";
+    return new Date(date).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
     });
+  };
 
-    await booking.save();
-
-    // Populate the booking before sending response
-    await booking.populate("userId", "name email");
-    await booking.populate("tripId", "name destination price");
-
-    res.status(201).json({
-      message: "Booking created successfully",
-      booking,
+  const formatDateTime = (date) => {
+    if (!date) return "null";
+    return new Date(date).toLocaleString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
     });
-  } catch (err) {
-    console.error("Error creating booking:", err);
-    res.status(500).json({ message: "Error creating booking" });
-  }
+  };
+
+  const getStatusColor = (status) => {
+    const s = status?.toLowerCase();
+    switch (s) {
+      case "confirmed":
+      case "paid":
+        return "confirmed";
+      case "pending":
+        return "pending";
+      case "cancelled":
+      case "refunded":
+        return "cancelled";
+      case "completed":
+        return "completed";
+      default:
+        return "pending";
+    }
+  };
+
+  if (loading)
+    return (
+      <div className="view-booking-container">
+        <div className="loading">Loading booking details...</div>
+      </div>
+    );
+
+  if (error)
+    return (
+      <div className="view-booking-container">
+        <div className="error">
+          <p>Error: {error}</p>
+          <button onClick={fetchBookingDetails} className="retry-btn">
+            Try Again
+          </button>
+          <button onClick={handleBack} className="back-btn-error">
+            Back to Bookings
+          </button>
+        </div>
+      </div>
+    );
+
+  if (!booking)
+    return (
+      <div className="view-booking-container">
+        <div className="error">Booking not found</div>
+      </div>
+    );
+
+  return (
+    <div className="view-booking-container">
+      {/* Header */}
+      <div className="view-booking-header">
+        <button onClick={handleBack} className="back-btn">
+          <span>←</span> Back to Bookings
+        </button>
+
+        <div className="header-info">
+          <h1>Booking Details</h1>
+          <p className="booking-id">ID: {displayValue(booking.bookingId)}</p>
+        </div>
+
+        <div
+          className={`status-badge ${getStatusColor(booking.bookingStatus)}`}
+        >
+          {displayValue(booking.bookingStatus)}
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="booking-details-content">
+        {/* Customer Info */}
+        <div className="details-section">
+          <h2 className="section-title">Customer Information</h2>
+          <div className="info-grid">
+            <div className="info-item">
+              <label>User ID</label>
+              <p>{displayValue(booking.userId?._id)}</p>
+            </div>
+            <div className="info-item">
+              <label>Name</label>
+              <p>{displayValue(booking.userId?.name)}</p>
+            </div>
+            <div className="info-item">
+              <label>Email</label>
+              <p>{displayValue(booking.userId?.email)}</p>
+            </div>
+            <div className="info-item">
+              <label>Phone</label>
+              <p>{displayValue(booking.userId?.phone)}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Trip Info */}
+        <div className="details-section">
+          <h2 className="section-title">Trip Information</h2>
+          <div className="info-grid">
+            <div className="info-item">
+              <label>Trip ID</label>
+              <p>{displayValue(booking.tripId?._id)}</p>
+            </div>
+            <div className="info-item">
+              <label>Trip Name</label>
+              <p>{displayValue(booking.tripId?.name)}</p>
+            </div>
+            <div className="info-item">
+              <label>Destination</label>
+              <p>{displayValue(booking.tripId?.destination)}</p>
+            </div>
+            <div className="info-item">
+              <label>Trip Price (per person)</label>
+              <p className="price">${displayValue(booking.tripId?.price)}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Booking Info */}
+        <div className="details-section">
+          <h2 className="section-title">Booking Information</h2>
+          <div className="info-grid">
+            <div className="info-item">
+              <label>MongoDB ID</label>
+              <p>{displayValue(booking._id)}</p>
+            </div>
+            <div className="info-item">
+              <label>Booking ID</label>
+              <p>{displayValue(booking.bookingId)}</p>
+            </div>
+            <div className="info-item">
+              <label>Booking Date</label>
+              <p>{formatDate(booking.bookingDate)}</p>
+            </div>
+            <div className="info-item">
+              <label>Total Guests</label>
+              <p>{displayValue(booking.guests?.length)}</p>
+            </div>
+            <div className="info-item">
+              <label>Booking Status</label>
+              <p>
+                <span
+                  className={`status-badge ${getStatusColor(
+                    booking.bookingStatus
+                  )}`}
+                >
+                  {displayValue(booking.bookingStatus)}
+                </span>
+              </p>
+            </div>
+            <div className="info-item">
+              <label>Payment Status</label>
+              <p>
+                <span
+                  className={`payment-badge ${getStatusColor(
+                    booking.paymentStatus
+                  )}`}
+                >
+                  {displayValue(booking.paymentStatus)}
+                </span>
+              </p>
+            </div>
+            <div className="info-item">
+              <label>Acknowledged</label>
+              <p>
+                <span
+                  className={`acknowledge-badge ${
+                    booking.acknowledge ? "yes" : "no"
+                  }`}
+                >
+                  {booking.acknowledge ? "Yes" : "No"}
+                </span>
+              </p>
+            </div>
+            <div className="info-item">
+              <label>Created At</label>
+              <p>{formatDateTime(booking.createdAt)}</p>
+            </div>
+            <div className="info-item">
+              <label>Last Updated</label>
+              <p>{formatDateTime(booking.updatedAt)}</p>
+            </div>
+            <div className="info-item">
+              <label>Version</label>
+              <p>{displayValue(booking.__v)}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Payment Info */}
+        <div className="details-section payment-section">
+          <h2 className="section-title">Registration Payment Details</h2>
+          <div className="info-grid">
+            <div className="info-item">
+              <label>Transaction ID</label>
+              <p>
+                {displayValue(
+                  booking.registrationPaymentDetails?.transactionId
+                )}
+              </p>
+            </div>
+            <div className="info-item">
+              <label>Payment Status</label>
+              <p>
+                <span
+                  className={`payment-badge ${getStatusColor(
+                    booking.registrationPaymentDetails?.status
+                  )}`}
+                >
+                  {displayValue(booking.registrationPaymentDetails?.status)}
+                </span>
+              </p>
+            </div>
+            <div className="info-item">
+              <label>Amount</label>
+              <p className="price">
+                {displayValue(
+                  booking.registrationPaymentDetails?.currency || "USD"
+                )}{" "}
+                ${displayValue(booking.registrationPaymentDetails?.amount)}
+              </p>
+            </div>
+            <div className="info-item">
+              <label>Payment Date</label>
+              <p>
+                {formatDateTime(
+                  booking.registrationPaymentDetails?.paymentDate
+                )}
+              </p>
+            </div>
+            <div className="info-item">
+              <label>Payer Name</label>
+              <p>
+                {displayValue(booking.registrationPaymentDetails?.payerName)}
+              </p>
+            </div>
+            <div className="info-item">
+              <label>Payer Email</label>
+              <p>
+                {displayValue(booking.registrationPaymentDetails?.payerEmail)}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Guest Info */}
+        <div className="details-section guests-section">
+          <h2 className="section-title">
+            Guest Details ({booking.guests?.length || 0})
+          </h2>
+          <div className="guests-list">
+            {booking.guests && booking.guests.length > 0 ? (
+              booking.guests.map((guest, index) => (
+                <div key={guest._id || index} className="guest-card">
+                  <div className="guest-header">
+                    <h3>Guest {index + 1}</h3>
+                    <span className="guest-age">
+                      Age: {displayValue(guest.age)}
+                    </span>
+                  </div>
+
+                  <div className="guest-details">
+                    {/* Basic Info */}
+                    <div className="guest-subsection">
+                      <h4>Basic Information</h4>
+                      <div className="guest-info-grid">
+                        <div className="guest-info-item">
+                          <label>Guest ID</label>
+                          <p>{displayValue(guest._id)}</p>
+                        </div>
+                        <div className="guest-info-item">
+                          <label>Name</label>
+                          <p>{displayValue(guest.name)}</p>
+                        </div>
+                        <div className="guest-info-item">
+                          <label>Age</label>
+                          <p>{displayValue(guest.age)}</p>
+                        </div>
+                        <div className="guest-info-item">
+                          <label>Gender</label>
+                          <p className="capitalize">
+                            {displayValue(guest.gender)}
+                          </p>
+                        </div>
+                        <div className="guest-info-item">
+                          <label>Phone</label>
+                          <p>{displayValue(guest.phone)}</p>
+                        </div>
+                        <div className="guest-info-item">
+                          <label>Country</label>
+                          <p>{displayValue(guest.country)}</p>
+                        </div>
+                        <div className="guest-info-item">
+                          <label>State</label>
+                          <p>{displayValue(guest.state)}</p>
+                        </div>
+                        <div className="guest-info-item full-width">
+                          <label>Address</label>
+                          <p>{displayValue(guest.address)}</p>
+                        </div>
+                        <div className="guest-info-item">
+                          <label>Created At</label>
+                          <p>{formatDateTime(guest.createdAt)}</p>
+                        </div>
+                        <div className="guest-info-item">
+                          <label>Updated At</label>
+                          <p>{formatDateTime(guest.updatedAt)}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Passport Info - ALWAYS SHOW */}
+                    <div className="guest-subsection">
+                      <h4>Passport Information</h4>
+                      <div className="guest-info-grid">
+                        <div className="guest-info-item">
+                          <label>Passport Number</label>
+                          <p>{displayValue(guest.passportNumber)}</p>
+                        </div>
+                        <div className="guest-info-item">
+                          <label>Passport Country</label>
+                          <p>{displayValue(guest.passportCountry)}</p>
+                        </div>
+                        <div className="guest-info-item">
+                          <label>Issued On</label>
+                          <p>{formatDate(guest.passportIssuedOn)}</p>
+                        </div>
+                        <div className="guest-info-item">
+                          <label>Expires On</label>
+                          <p>{formatDate(guest.passportExpiresOn)}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Emergency Contact - ALWAYS SHOW */}
+                    <div className="guest-subsection">
+                      <h4>Emergency Contact</h4>
+                      <div className="guest-info-grid">
+                        <div className="guest-info-item">
+                          <label>Contact Name</label>
+                          <p>{displayValue(guest.emergencyContactName)}</p>
+                        </div>
+                        <div className="guest-info-item">
+                          <label>Contact Number</label>
+                          <p>{displayValue(guest.emergencyContactNumber)}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Uploaded Documents - ALWAYS SHOW */}
+                    <div className="guest-subsection">
+                      <h4>Uploaded Documents</h4>
+                      <div className="documents-grid">
+                        <div className="document-item">
+                          <label>Passport Copy</label>
+                          {guest.passport ? (
+                            <a
+                              href={guest.passport}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="document-link"
+                            >
+                              View Document →
+                            </a>
+                          ) : (
+                            <p>null</p>
+                          )}
+                        </div>
+                        <div className="document-item">
+                          <label>Medical Certificate</label>
+                          {guest.medicalCertificate ? (
+                            <a
+                              href={guest.medicalCertificate}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="document-link"
+                            >
+                              View Document →
+                            </a>
+                          ) : (
+                            <p>null</p>
+                          )}
+                        </div>
+                        <div className="document-item">
+                          <label>Travel Insurance</label>
+                          {guest.travelInsurance ? (
+                            <a
+                              href={guest.travelInsurance}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="document-link"
+                            >
+                              View Document →
+                            </a>
+                          ) : (
+                            <p>null</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="no-guests">No guest information available</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
-// admin.controller.js
-// Add this function to your existing controller
-export const getAllTrips = async (req, res) => {
-  try {
-    // Assuming you have a Trip model
-    const trips = await Trip.find({}).select("name destination price duration"); // Adjust fields as needed
-    res.status(200).json(trips);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
+export default ViewBooking;
